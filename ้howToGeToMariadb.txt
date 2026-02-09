@@ -1,0 +1,107 @@
+ตอนนี้ MariaDB คุณรันใน Docker แล้ว expose port ออกมาที่ host เป็น 32781 อยู่แล้ว (จาก docker ps ก่อนหน้า) ดังนั้นจาก “ภายนอกเครื่อง” จะต่อได้แบบนี้เลยครับ
+
+1) รูปแบบการต่อจากข้างนอก
+จากเครื่องอื่น (หรือจาก client บนเครื่องคุณเอง เช่น TablePlus / DBeaver / mysql client):
+
+Host: 76.13.182.75
+
+Port: 32781
+
+User: myapp_user
+
+Password: narq87pxxxx
+
+Database: myapp
+
+ตัวอย่างคำสั่งด้วย client:
+
+bash
+mariadb -h 76.13.182.75 -P 32781 -u myapp_user -p
+แล้วใส่รหัส narq87pf5Jt9vcSF5BiLPm940b9OwN2Z
+
+
+หรือใน GUI client:
+
+Server / Host: 76.13.182.75
+
+Port: 32781
+
+(ไม่ต้องใช้ชื่อ container เพราะตอนนี้คุณมาจาก “นอก Docker”)
+
+2) เงื่อนไขที่ต้องพร้อม
+Port เปิดแล้ว
+
+จาก docker ps คุณมี mapping 0.0.0.0:32781->3306/tcp อยู่แล้ว → ok
+
+Firewall / Security group
+
+ถ้าต่อจากเครื่องอื่นแล้วยังไม่ได้ อาจโดน firewall ของ VPS/Hostinger บล็อก port 32781 ต้องเปิด port นี้ใน firewall ก่อน
+
+สิทธิ user
+
+เราเคยเช็คใน container แล้ว myapp_user login ได้ → user ok
+
+ถ้าจากภายนอกยังเจอ Access denied for user 'myapp_user'@'xxx.xxx.xxx.xxx' ค่อย GRANT สิทธิ 'myapp_user'@'%' เพิ่ม (แต่ตอนนี้เราใช้ภายใน Docker อยู่แล้ว น่าจะโอเค)
+
+3) ถ้าทดสอบแล้ว error ให้ส่งข้อความเต็มมา
+ลองจากเครื่องคุณ:
+
+bash
+mariadb -h 76.13.182.75 -P 32781 -u myapp_user -p
+ถ้าเข้าได้ → คุณใช้ค่าชุดนี้กับทุก client ภายนอกได้เลย
+
+ถ้าไม่ได้ → copy error ทั้งบรรทัด (เช่น Connection refused หรือ Access denied) มาบอก ผมจะช่วยเจาะว่าติดที่ firewall หรือสิทธิ user ครับ
+
+
+
+นี่คือรหัส
+MYSQL_DATABASE
+*
+myapp
+Name of the initial database to create
+MYSQL_USER
+*
+myapp_user
+Username for the application database
+MYSQL_PASSWORD
+*
+narq87pf5Jt9vcSF5BiLPm940b9OwN2Z
+
+Password for the application database user
+
+
+
+กรณีเข้าด้วย adminer:
+
+
+ให้กรอกแบบนี้ที่ http://76.13.182.75:32784:
+
+System: MySQL / MariaDB
+
+Server: mariadb-eqfd-mariadb-1
+
+Username: myapp_user
+
+Password: narq87pf5Jt9vcSF5BiLPm940b9OwN2Z
+
+
+
+
+
+ปกติเข้า http://76.13.182.75:32782/dashboard/#/nc/ptgr3iif3e1ampj
+ด้วย nocodb
+
+ส่วนนี่คือวิธีเข้าด้วย adminer
+http://76.13.182.75:32784/
+[ให้กรอกแบบนี้ที่ http://76.13.182.75:32784:
+
+System: MySQL / MariaDB
+
+Server: mariadb-eqfd-mariadb-1
+
+Username: myapp_user
+
+Password: narq87pf5Jt9vcSF5BiLPm940b9OwN2Z
+
+
+Database: เว้นว่าง]

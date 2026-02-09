@@ -6,8 +6,7 @@ services:
     container_name: kaizen-flow
     restart: unless-stopped
     ports:
-      - "80:80"       # Frontend
-      - "3001:3001"   # API
+      - "80:80"
     environment:
       # MariaDB
       - DB_HOST=${DB_HOST}
@@ -22,7 +21,6 @@ services:
       - PORT=3001
       - NODE_ENV=production
     extra_hosts:
-      # ให้ Docker container เข้าถึง host machine
       - "host.docker.internal:host-gateway"
     networks:
       - kaizen-network

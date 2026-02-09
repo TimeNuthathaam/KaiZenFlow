@@ -5,7 +5,6 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copy frontend files
 COPY package*.json ./
 RUN npm ci
 
@@ -17,6 +16,9 @@ RUN npm run build
 # ==========================================
 FROM node:20-alpine AS production
 
+# Install nginx and supervisor
+RUN apk add --no-cache nginx supervisor
+
 WORKDIR /app
 
 # Copy backend
@@ -25,18 +27,28 @@ RUN cd server && npm ci --only=production
 
 COPY server/ ./server/
 
-# Copy built frontend
-COPY --from=frontend-builder /app/dist ./dist
+# Copy built frontend to nginx
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
-# Install serve for static files
-RUN npm install -g serve
+# Copy nginx config
+COPY nginx.conf /etc/nginx/http.d/default.conf
 
-# Create startup script
-RUN echo '#!/bin/sh' > /app/start.sh && \
-    echo 'cd /app/server && node index.js &' >> /app/start.sh && \
-    echo 'serve -s /app/dist -l 80' >> /app/start.sh && \
-    chmod +x /app/start.sh
+# Create supervisor config
+RUN mkdir -p /etc/supervisor.d
+RUN echo '[supervisord]' > /etc/supervisor.d/supervisord.ini && \
+    echo 'nodaemon=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo '' >> /etc/supervisor.d/supervisord.ini && \
+    echo '[program:nginx]' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'command=nginx -g "daemon off;"' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'autostart=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'autorestart=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo '' >> /etc/supervisor.d/supervisord.ini && \
+    echo '[program:backend]' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'command=node /app/server/index.js' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'directory=/app/server' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'autostart=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'autorestart=true' >> /etc/supervisor.d/supervisord.ini
 
-EXPOSE 80 3001
+EXPOSE 80
 
-CMD ["/app/start.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor.d/supervisord.ini"]

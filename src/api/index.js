@@ -1,4 +1,7 @@
-const API_BASE = '/api';
+// Use port 3001 for API in production (serve on port 80 doesn't proxy)
+const API_BASE = window.location.port === '5173'
+    ? '/api'  // Dev mode - vite proxy
+    : `${window.location.protocol}//${window.location.hostname}:3001/api`;  // Production
 
 class ApiClient {
     async request(endpoint, options = {}) {

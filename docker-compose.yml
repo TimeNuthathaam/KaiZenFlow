@@ -8,23 +8,24 @@ services:
     ports:
       - "80:80"
     environment:
-      # MariaDB
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
+      # MariaDB — connect via Docker network using container name
+      - DB_HOST=mariadb-eqfd-mariadb-1
+      - DB_PORT=3306
+      - DB_USER=myapp_user
+      - DB_PASSWORD=narq87pf5Jt9vcSF5BiLPm940b9OwN2Z
+      - DB_NAME=myapp
       # OpenClaw
-      - OPENCLAW_URL=${OPENCLAW_URL}
-      - OPENCLAW_TOKEN=${OPENCLAW_TOKEN}
+      - OPENCLAW_URL=http://host.docker.internal:18789/hooks/wake
+      - OPENCLAW_TOKEN=your_secret_token_here
       # Server
       - PORT=3001
       - NODE_ENV=production
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - kaizen-network
+      - mariadb-network
 
 networks:
-  kaizen-network:
-    driver: bridge
+  mariadb-network:
+    external: true
+    name: mariadb-eqfd_default

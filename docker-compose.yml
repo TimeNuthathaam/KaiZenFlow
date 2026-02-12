@@ -4,7 +4,7 @@ services:
     container_name: kaizen-flow
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "3080:80"
     environment:
       # MariaDB — connect via Docker network using container name
       - DB_HOST=mariadb-eqfd-mariadb-1

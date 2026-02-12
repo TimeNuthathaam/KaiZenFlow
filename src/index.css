@@ -351,3 +351,20 @@ input:focus-visible {
 .animate-complete {
   animation: taskComplete 0.4s ease-out;
 }
+
+/* Parking Lot slow pulse */
+@keyframes pulseSlow {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 3s ease-in-out infinite;
+}

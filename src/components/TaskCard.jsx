@@ -1,5 +1,5 @@
-import { Star, Trash2, Check, GripVertical } from 'lucide-react';
-import { getBucketConfig } from '../utils/constants';
+import { Star, Trash2, Check, GripVertical, Clock } from 'lucide-react';
+import { getBucketConfig, getPriorityConfig, getNextPriority, formatMinutes } from '../utils/constants';
 
 export default function TaskCard({
     task,
@@ -8,14 +8,21 @@ export default function TaskCard({
     onDelete,
     onDragStart,
     onDragEnd,
+    onUpdateTask,
     isDragging
 }) {
     const bucket = getBucketConfig(task.bucket);
+    const priority = getPriorityConfig(task.priority_type);
 
     const handleDragStart = (e) => {
         e.dataTransfer.setData('text/plain', task.id.toString());
         e.dataTransfer.effectAllowed = 'move';
         onDragStart(e, task);
+    };
+
+    const handleCyclePriority = () => {
+        const next = getNextPriority(task.priority_type);
+        onUpdateTask?.(task.id, { priority_type: next });
     };
 
     return (
@@ -37,21 +44,60 @@ export default function TaskCard({
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                    <p className={`font-medium break-words ${task.is_completed ? 'line-through text-gray-500' : 'text-white'
-                        }`}>
-                        {task.title}
-                    </p>
+                    <div className="flex items-center gap-2">
+                        {/* Priority Icon */}
+                        {priority && (
+                            <span className="text-sm flex-shrink-0" title={priority.label}>
+                                {priority.icon}
+                            </span>
+                        )}
+                        <p className={`font-medium break-words ${task.is_completed ? 'line-through text-gray-500' : 'text-white'
+                            }`}>
+                            {task.title}
+                        </p>
+                    </div>
 
-                    {task.is_daily_highlight && (
-                        <span className="inline-flex items-center gap-1 mt-1 text-xs text-yellow-400">
-                            <Star className="w-3 h-3 fill-yellow-400" />
-                            Daily Highlight
-                        </span>
-                    )}
+                    {/* Badges row */}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {task.is_daily_highlight && (
+                            <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
+                                <Star className="w-3 h-3 fill-yellow-400" />
+                                Daily Highlight
+                            </span>
+                        )}
+                        {task.estimated_duration && (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-400 bg-white/5 px-2 py-0.5 rounded-full">
+                                <Clock className="w-3 h-3" />
+                                ~{formatMinutes(task.estimated_duration)}
+                            </span>
+                        )}
+                        {task.energy_level && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full bg-white/5 ${task.energy_level === 'high' ? 'text-red-400' :
+                                task.energy_level === 'medium' ? 'text-yellow-400' : 'text-green-400'
+                                }`}>
+                                {task.energy_level === 'high' ? '⚡High' :
+                                    task.energy_level === 'medium' ? '🔋Med' : '🍃Low'}
+                            </span>
+                        )}
+                        {task.source === 'parking_lot' && (
+                            <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                                🅿️ Parking
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Priority Cycle */}
+                    <button
+                        onClick={handleCyclePriority}
+                        className="p-2 rounded-lg hover:bg-white/10 text-gray-500 hover:text-white transition-all"
+                        title={`Priority: ${priority ? priority.label : 'None'} (click to cycle)`}
+                    >
+                        <span className="text-sm">{priority ? priority.icon : '⭕'}</span>
+                    </button>
+
                     {/* Star / Daily Highlight */}
                     <button
                         onClick={() => onToggleHighlight(task.id)}

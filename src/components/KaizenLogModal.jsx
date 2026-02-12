@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { X, Send } from 'lucide-react';
-import { MOODS, getBucketConfig, formatDuration } from '../utils/constants';
+import { X, Send, TrendingUp } from 'lucide-react';
+import { MOODS, getBucketConfig, formatDuration, formatMinutes } from '../utils/constants';
 
 export default function KaizenLogModal({
     bucket,
     durationSeconds,
+    estimatedSeconds,
     onSave,
     onClose
 }) {
@@ -12,12 +13,28 @@ export default function KaizenLogModal({
     const [notes, setNotes] = useState('');
     const bucketConfig = getBucketConfig(bucket);
 
+    const estimatedMinutes = estimatedSeconds ? Math.round(estimatedSeconds / 60) : null;
+    const actualMinutes = Math.round(durationSeconds / 60);
+
+    // Calculate accuracy
+    const getAccuracy = () => {
+        if (!estimatedSeconds || durationSeconds < 10) return null;
+        const ratio = durationSeconds / estimatedSeconds;
+        if (ratio < 0.8) return { label: 'เร็วกว่าที่คิด!', color: 'text-green-400', emoji: '🏎️', pct: Math.round((1 - ratio) * 100) };
+        if (ratio <= 1.2) return { label: 'แม่นยำมาก!', color: 'text-green-400', emoji: '🎯', pct: Math.round(Math.abs(1 - ratio) * 100) };
+        if (ratio <= 2) return { label: 'นานกว่าที่คิด', color: 'text-yellow-400', emoji: '⏰', pct: Math.round((ratio - 1) * 100) };
+        return { label: 'เกินไปมาก!', color: 'text-red-400', emoji: '🐢', pct: Math.round((ratio - 1) * 100) };
+    };
+
+    const accuracy = getAccuracy();
+
     const handleSubmit = () => {
         if (!selectedMood) return;
 
         onSave({
             bucket,
             duration_seconds: durationSeconds,
+            estimated_seconds: estimatedSeconds || null,
             mood: selectedMood,
             notes: notes.trim() || null
         });
@@ -55,6 +72,34 @@ export default function KaizenLogModal({
                             <span className={bucketConfig.textClass}>{bucketConfig.name}</span>
                         </div>
                     </div>
+
+                    {/* ⏱️ Reality Check */}
+                    {estimatedMinutes > 0 && (
+                        <div className="glass rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <TrendingUp className="w-4 h-4 text-creative" />
+                                <span className="text-sm font-medium text-gray-300">Reality Check</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-center mb-3">
+                                <div>
+                                    <p className="text-xs text-gray-500 mb-1">📐 ประเมิน</p>
+                                    <p className="text-lg font-bold text-blue-400">{formatMinutes(estimatedMinutes)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500 mb-1">⏱️ ใช้จริง</p>
+                                    <p className="text-lg font-bold text-white">{formatMinutes(actualMinutes) || '<1m'}</p>
+                                </div>
+                            </div>
+
+                            {accuracy && (
+                                <div className={`text-center text-sm ${accuracy.color} font-medium`}>
+                                    {accuracy.emoji} {accuracy.label}
+                                    {accuracy.pct > 0 && <span className="text-gray-500 ml-1">({accuracy.pct}%)</span>}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Mood Selector */}
                     <div>

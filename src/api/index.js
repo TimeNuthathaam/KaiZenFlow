@@ -89,10 +89,10 @@ class ApiClient {
         return this.request('/tasks');
     }
 
-    async createTask(title, bucket = 'unsorted') {
+    async createTask(title, options = {}) {
         return this.request('/tasks', {
             method: 'POST',
-            body: JSON.stringify({ title, bucket }),
+            body: JSON.stringify({ title, bucket: options.bucket || 'unsorted', ...options }),
         });
     }
 

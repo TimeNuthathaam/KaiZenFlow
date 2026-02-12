@@ -10,6 +10,7 @@ export default function EnergyBucket({
     onToggleHighlight,
     onToggleComplete,
     onDelete,
+    onUpdateTask,
     onDragStart,
     onDragEnd,
     onDragOver,
@@ -104,6 +105,7 @@ export default function EnergyBucket({
                                 onToggleHighlight={onToggleHighlight}
                                 onToggleComplete={onToggleComplete}
                                 onDelete={onDelete}
+                                onUpdateTask={onUpdateTask}
                                 onDragStart={onDragStart}
                                 onDragEnd={onDragEnd}
                                 isDragging={draggingTask?.id === task.id}

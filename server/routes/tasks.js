@@ -44,15 +44,22 @@ router.get('/:id', async (req, res) => {
 // POST create task
 router.post('/', async (req, res) => {
     try {
-        const { title, bucket = 'unsorted' } = req.body;
+        const {
+            title,
+            bucket = 'unsorted',
+            estimated_duration = null,
+            energy_level = null,
+            priority_type = null,
+            source = 'manual',
+        } = req.body;
 
         if (!title || title.trim() === '') {
             return res.status(400).json({ error: 'Title is required' });
         }
 
         const [result] = await pool.query(
-            'INSERT INTO kaizen_tasks (title, bucket) VALUES (?, ?)',
-            [title.trim(), bucket]
+            'INSERT INTO kaizen_tasks (title, bucket, estimated_duration, energy_level, priority_type, source) VALUES (?, ?, ?, ?, ?, ?)',
+            [title.trim(), bucket, estimated_duration, energy_level, priority_type, source]
         );
 
         const [newTask] = await pool.query('SELECT * FROM kaizen_tasks WHERE id = ?', [result.insertId]);
@@ -67,34 +74,23 @@ router.post('/', async (req, res) => {
 // PUT update task
 router.put('/:id', async (req, res) => {
     try {
-        const { title, bucket, is_daily_highlight, is_completed, sort_order } = req.body;
+        const { title, bucket, is_daily_highlight, is_completed, sort_order, estimated_duration, energy_level, priority_type } = req.body;
         const updates = [];
         const values = [];
 
-        if (title !== undefined) {
-            updates.push('title = ?');
-            values.push(title.trim());
-        }
-        if (bucket !== undefined) {
-            updates.push('bucket = ?');
-            values.push(bucket);
-        }
+        if (title !== undefined) { updates.push('title = ?'); values.push(title.trim()); }
+        if (bucket !== undefined) { updates.push('bucket = ?'); values.push(bucket); }
         if (is_daily_highlight !== undefined) {
-            // If setting as daily highlight, unset all others first
             if (is_daily_highlight === true) {
                 await pool.query('UPDATE kaizen_tasks SET is_daily_highlight = FALSE WHERE is_daily_highlight = TRUE');
             }
-            updates.push('is_daily_highlight = ?');
-            values.push(is_daily_highlight);
+            updates.push('is_daily_highlight = ?'); values.push(is_daily_highlight);
         }
-        if (is_completed !== undefined) {
-            updates.push('is_completed = ?');
-            values.push(is_completed);
-        }
-        if (sort_order !== undefined) {
-            updates.push('sort_order = ?');
-            values.push(sort_order);
-        }
+        if (is_completed !== undefined) { updates.push('is_completed = ?'); values.push(is_completed); }
+        if (sort_order !== undefined) { updates.push('sort_order = ?'); values.push(sort_order); }
+        if (estimated_duration !== undefined) { updates.push('estimated_duration = ?'); values.push(estimated_duration); }
+        if (energy_level !== undefined) { updates.push('energy_level = ?'); values.push(energy_level); }
+        if (priority_type !== undefined) { updates.push('priority_type = ?'); values.push(priority_type); }
 
         if (updates.length === 0) {
             return res.status(400).json({ error: 'No fields to update' });
@@ -133,15 +129,13 @@ router.delete('/:id', async (req, res) => {
 // Bulk update sort order
 router.post('/reorder', async (req, res) => {
     try {
-        const { tasks } = req.body; // Array of { id, sort_order, bucket }
-
+        const { tasks } = req.body;
         for (const task of tasks) {
             await pool.query(
                 'UPDATE kaizen_tasks SET sort_order = ?, bucket = ? WHERE id = ?',
                 [task.sort_order, task.bucket, task.id]
             );
         }
-
         broadcast('tasks_reordered', { count: tasks.length });
         res.json({ success: true });
     } catch (error) {

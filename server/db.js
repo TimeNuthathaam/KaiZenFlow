@@ -105,6 +105,10 @@ async function initializeTables() {
                 is_daily_highlight BOOLEAN DEFAULT FALSE,
                 is_completed BOOLEAN DEFAULT FALSE,
                 sort_order INT DEFAULT 0,
+                estimated_duration INT DEFAULT NULL COMMENT 'Estimated minutes',
+                energy_level ENUM('low', 'medium', 'high') DEFAULT NULL,
+                priority_type ENUM('fire', 'bolt', 'turtle') DEFAULT NULL COMMENT '🔥⚡🐢',
+                source ENUM('manual', 'parking_lot', 'voice', 'mcp') DEFAULT 'manual',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_bucket (bucket),
@@ -122,6 +126,7 @@ async function initializeTables() {
                 ended_at TIMESTAMP NULL,
                 duration_seconds INT DEFAULT 0,
                 is_active BOOLEAN DEFAULT TRUE,
+                estimated_total_minutes INT DEFAULT NULL COMMENT 'Sum of task estimates in this sprint',
                 INDEX idx_active (is_active),
                 INDEX idx_started (started_at)
             )
@@ -134,6 +139,7 @@ async function initializeTables() {
                 sprint_id INT,
                 bucket VARCHAR(50) NOT NULL,
                 duration_seconds INT NOT NULL DEFAULT 0,
+                estimated_seconds INT DEFAULT NULL COMMENT 'Sum of estimated durations for comparison',
                 mood ENUM('flow', 'okay', 'drained') NOT NULL,
                 notes TEXT,
                 tasks_completed TEXT,
@@ -145,13 +151,45 @@ async function initializeTables() {
 
         // Verify tables
         const [tables] = await pool.query(`SHOW TABLES LIKE 'kaizen%'`);
-        logStep(4, 'TABLES_INIT', 'ok', `${tables.length} tables ready (kaizen_tasks, kaizen_sprints, kaizen_logs)`);
+        logStep(4, 'TABLES_INIT', 'ok', `${tables.length} tables ready`);
+
+        // Step 5: Migrate existing tables (add new columns safely)
+        await migrateColumns();
+
         return true;
 
     } catch (error) {
         logStep(4, 'TABLES_INIT', 'fail', `Table creation failed: ${error.message}`);
         return false;
     }
+}
+
+// ==========================================
+// Step 5: Migrate columns for existing tables
+// ==========================================
+async function migrateColumns() {
+    const migrations = [
+        { table: 'kaizen_tasks', column: 'estimated_duration', sql: 'ALTER TABLE kaizen_tasks ADD COLUMN estimated_duration INT DEFAULT NULL' },
+        { table: 'kaizen_tasks', column: 'energy_level', sql: "ALTER TABLE kaizen_tasks ADD COLUMN energy_level ENUM('low','medium','high') DEFAULT NULL" },
+        { table: 'kaizen_tasks', column: 'priority_type', sql: "ALTER TABLE kaizen_tasks ADD COLUMN priority_type ENUM('fire','bolt','turtle') DEFAULT NULL" },
+        { table: 'kaizen_tasks', column: 'source', sql: "ALTER TABLE kaizen_tasks ADD COLUMN source ENUM('manual','parking_lot','voice','mcp') DEFAULT 'manual'" },
+        { table: 'kaizen_sprints', column: 'estimated_total_minutes', sql: 'ALTER TABLE kaizen_sprints ADD COLUMN estimated_total_minutes INT DEFAULT NULL' },
+        { table: 'kaizen_logs', column: 'estimated_seconds', sql: 'ALTER TABLE kaizen_logs ADD COLUMN estimated_seconds INT DEFAULT NULL' },
+    ];
+
+    let added = 0;
+    for (const m of migrations) {
+        try {
+            const [cols] = await pool.query(`SHOW COLUMNS FROM ${m.table} LIKE '${m.column}'`);
+            if (cols.length === 0) {
+                await pool.query(m.sql);
+                added++;
+            }
+        } catch (e) {
+            console.log(`  ⚠️ Migration skip: ${m.table}.${m.column} — ${e.message}`);
+        }
+    }
+    logStep(5, 'MIGRATION', 'ok', `${added} new columns added (${migrations.length} checked)`);
 }
 
 // ==========================================

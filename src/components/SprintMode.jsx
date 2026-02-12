@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Square, Check, Star, AlertTriangle } from 'lucide-react';
-import { getBucketConfig, formatDuration } from '../utils/constants';
+import { useState, useEffect, useMemo } from 'react';
+import { Square, Check, Star, AlertTriangle, Clock, TrendingUp } from 'lucide-react';
+import { getBucketConfig, formatDuration, formatMinutes, getPriorityConfig } from '../utils/constants';
 
 // Encouragement messages for ADHD support
 const SPRINT_ENCOURAGEMENTS = [
@@ -32,6 +32,13 @@ export default function SprintMode({
     const completedCount = tasks.filter(t => t.is_completed).length;
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
 
+    // Calculate estimated total from tasks
+    const estimatedTotal = useMemo(() => {
+        return tasks.reduce((sum, t) => sum + (t.estimated_duration || 0), 0);
+    }, [tasks]);
+
+    const estimatedTotalSeconds = estimatedTotal * 60;
+
     // Random encouragement on mount
     useEffect(() => {
         setEncouragement(SPRINT_ENCOURAGEMENTS[Math.floor(Math.random() * SPRINT_ENCOURAGEMENTS.length)]);
@@ -59,10 +66,8 @@ export default function SprintMode({
 
     const handleStopClick = () => {
         if (elapsedSeconds < 60) {
-            // Less than 1 minute, just stop
             onStopSprint(elapsedSeconds);
         } else {
-            // Show confirmation
             setShowStopConfirm(true);
         }
     };
@@ -71,6 +76,18 @@ export default function SprintMode({
         setShowStopConfirm(false);
         onStopSprint(elapsedSeconds);
     };
+
+    // Calculate estimation accuracy
+    const getAccuracyInfo = () => {
+        if (!estimatedTotal || elapsedSeconds < 10) return null;
+        const ratio = elapsedSeconds / estimatedTotalSeconds;
+        if (ratio < 0.8) return { label: 'เร็วกว่าที่คิด!', color: 'text-green-400', emoji: '🏎️' };
+        if (ratio <= 1.2) return { label: 'ตรงเป๊ะ!', color: 'text-green-400', emoji: '🎯' };
+        if (ratio <= 1.5) return { label: 'นานกว่าที่คิดนิดหน่อย', color: 'text-yellow-400', emoji: '⏰' };
+        return { label: 'นานกว่าที่คิดมาก!', color: 'text-red-400', emoji: '🐢' };
+    };
+
+    const accuracy = getAccuracyInfo();
 
     return (
         <div className="fixed inset-0 bg-surface-dark/95 backdrop-blur-lg z-50 overflow-auto">
@@ -112,7 +129,7 @@ export default function SprintMode({
                 </div>
 
                 {/* Timer Display */}
-                <div className="text-center mb-8">
+                <div className="text-center mb-4">
                     <div className="timer-pulse inline-block">
                         <div className={`text-6xl md:text-8xl font-mono font-bold 
               bg-gradient-to-r ${bucket === 'urgent' ? 'from-urgent to-red-400' :
@@ -126,6 +143,52 @@ export default function SprintMode({
                     <p className="text-gray-500 mt-2">Time Elapsed (นับขึ้น ไม่ใช่ countdown)</p>
                 </div>
 
+                {/* ⏱️ Estimated vs Actual (Reality Check) */}
+                {estimatedTotal > 0 && (
+                    <div className="max-w-md mx-auto w-full mb-6 animate-fade-in">
+                        <div className="glass-strong rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <TrendingUp className="w-4 h-4 text-creative" />
+                                <span className="text-sm font-medium text-gray-300">Reality Check</span>
+                                {accuracy && (
+                                    <span className={`text-xs ml-auto ${accuracy.color}`}>
+                                        {accuracy.emoji} {accuracy.label}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Visual comparison bars */}
+                            <div className="space-y-2">
+                                <div>
+                                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                        <span>📐 ประเมิน</span>
+                                        <span>{formatMinutes(estimatedTotal)}</span>
+                                    </div>
+                                    <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full bg-blue-500/50" style={{ width: '100%' }} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                        <span>⏱️ ใช้จริง</span>
+                                        <span>{formatDuration(elapsedSeconds)}</span>
+                                    </div>
+                                    <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-1000 ${elapsedSeconds > estimatedTotalSeconds
+                                                ? 'bg-red-500/70' : 'bg-green-500/50'
+                                                }`}
+                                            style={{
+                                                width: `${Math.min((elapsedSeconds / estimatedTotalSeconds) * 100, 100)}%`
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Progress */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center gap-4 px-6 py-3 glass-strong rounded-2xl">
@@ -138,45 +201,66 @@ export default function SprintMode({
                             <p className="text-3xl font-bold text-gray-400">{tasks.length - completedCount}</p>
                             <p className="text-xs text-gray-400">เหลืออยู่</p>
                         </div>
+                        {estimatedTotal > 0 && (
+                            <>
+                                <div className="w-px h-10 bg-white/20" />
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold text-blue-400">~{formatMinutes(estimatedTotal)}</p>
+                                    <p className="text-xs text-gray-400">ประเมินรวม</p>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* Tasks */}
                 <div className="flex-1 max-w-2xl mx-auto w-full mb-8">
                     <div className="space-y-3">
-                        {tasks.map(task => (
-                            <div
-                                key={task.id}
-                                className={`glass-strong rounded-xl p-4 transition-all animate-card-enter
-                  ${task.is_completed ? 'opacity-60' : 'hover:bg-white/10 hover-lift'}
-                  ${task.is_daily_highlight ? 'ring-2 ring-yellow-500/50' : ''}`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    {/* Complete Button */}
-                                    <button
-                                        onClick={(e) => onToggleComplete(task.id, e)}
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center
-                      transition-all ripple ${task.is_completed
-                                                ? 'bg-green-500 text-white glow-success scale-110'
-                                                : 'border-2 border-gray-500 hover:border-green-500 hover:scale-105'
-                                            }`}
-                                    >
-                                        {task.is_completed && <Check className="w-6 h-6" />}
-                                    </button>
+                        {tasks.map(task => {
+                            const priority = getPriorityConfig(task.priority_type);
+                            return (
+                                <div
+                                    key={task.id}
+                                    className={`glass-strong rounded-xl p-4 transition-all animate-card-enter
+                                    ${task.is_completed ? 'opacity-60' : 'hover:bg-white/10 hover-lift'}
+                                    ${task.is_daily_highlight ? 'ring-2 ring-yellow-500/50' : ''}`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        {/* Complete Button */}
+                                        <button
+                                            onClick={(e) => onToggleComplete(task.id, e)}
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center
+                                            transition-all ripple ${task.is_completed
+                                                    ? 'bg-green-500 text-white glow-success scale-110'
+                                                    : 'border-2 border-gray-500 hover:border-green-500 hover:scale-105'
+                                                }`}
+                                        >
+                                            {task.is_completed && <Check className="w-6 h-6" />}
+                                        </button>
 
-                                    {/* Title */}
-                                    <span className={`flex-1 text-lg ${task.is_completed ? 'line-through text-gray-500' : 'text-white'
-                                        }`}>
-                                        {task.title}
-                                    </span>
+                                        {/* Priority + Title */}
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                {priority && <span>{priority.icon}</span>}
+                                                <span className={`text-lg ${task.is_completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                                                    {task.title}
+                                                </span>
+                                            </div>
+                                            {task.estimated_duration && (
+                                                <span className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                                    <Clock className="w-3 h-3" /> ~{formatMinutes(task.estimated_duration)}
+                                                </span>
+                                            )}
+                                        </div>
 
-                                    {/* Daily Highlight */}
-                                    {task.is_daily_highlight && (
-                                        <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                                    )}
+                                        {/* Daily Highlight */}
+                                        {task.is_daily_highlight && (
+                                            <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -205,6 +289,15 @@ export default function SprintMode({
                             <p className="text-gray-300 mb-2">
                                 คุณทำมาแล้ว <span className="text-creative font-bold">{formatDuration(elapsedSeconds)}</span>!
                             </p>
+
+                            {/* Reality Check in confirmation */}
+                            {estimatedTotal > 0 && (
+                                <p className="text-gray-400 mb-2 text-sm">
+                                    📐 ประเมินไว้ {formatMinutes(estimatedTotal)} → ⏱️ ใช้จริง {formatDuration(elapsedSeconds)}
+                                    {accuracy && <span className={` ml-1 ${accuracy.color}`}>{accuracy.emoji}</span>}
+                                </p>
+                            )}
+
                             <p className="text-gray-400 mb-6 text-sm">
                                 ถ้าหยุดตอนนี้ ก็ไม่เป็นไร แต่ลองคิดดูอีกทีนะ 💭
                             </p>

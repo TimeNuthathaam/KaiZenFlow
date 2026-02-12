@@ -7,6 +7,7 @@ import KaizenLogModal from './components/KaizenLogModal';
 import LogReview from './components/LogReview';
 import GuardRailAlert from './components/GuardRailAlert';
 import Celebration, { StreakBadge } from './components/Celebration';
+import ParkingLot from './components/ParkingLot';
 import api from './api';
 import { BUCKETS, GUARD_RAILS } from './utils/constants';
 
@@ -107,12 +108,24 @@ export default function App() {
     };
 
     // Task handlers
-    const handleAddTask = async (title) => {
+    const handleAddTask = async (title, options = {}) => {
         try {
-            const newTask = await api.createTask(title);
+            const newTask = await api.createTask(title, options);
             setTasks(prev => [newTask, ...prev]);
         } catch (err) {
             console.error('Error adding task:', err);
+        }
+    };
+
+    const handleUpdateTask = async (taskId, updates) => {
+        try {
+            setTasks(prev => prev.map(t =>
+                t.id === taskId ? { ...t, ...updates } : t
+            ));
+            await api.updateTask(taskId, updates);
+        } catch (err) {
+            console.error('Error updating task:', err);
+            loadTasks();
         }
     };
 
@@ -232,9 +245,12 @@ export default function App() {
     const handleStopSprint = async (elapsedSeconds) => {
         try {
             await api.stopSprint();
+            // Calculate estimated total from sprint tasks
+            const estimatedTotal = sprintTasks.reduce((sum, t) => sum + (t.estimated_duration || 0), 0);
             setPendingKaizenData({
                 bucket: activeSprint,
-                duration_seconds: elapsedSeconds
+                duration_seconds: elapsedSeconds,
+                estimated_seconds: estimatedTotal * 60,
             });
             setShowKaizenLog(true);
             setActiveSprint(null);
@@ -346,6 +362,7 @@ export default function App() {
                             onToggleHighlight={handleToggleHighlight}
                             onToggleComplete={handleToggleComplete}
                             onDelete={handleDeleteTask}
+                            onUpdateTask={handleUpdateTask}
                             onDragStart={handleDragStart}
                             onDragEnd={handleDragEnd}
                             onDragOver={(e) => {
@@ -383,6 +400,7 @@ export default function App() {
                 <KaizenLogModal
                     bucket={pendingKaizenData.bucket}
                     durationSeconds={pendingKaizenData.duration_seconds}
+                    estimatedSeconds={pendingKaizenData.estimated_seconds}
                     onSave={handleSaveKaizenLog}
                     onClose={handleCloseKaizenLog}
                 />
@@ -401,6 +419,9 @@ export default function App() {
                     <StreakBadge count={streak} />
                 </div>
             )}
+
+            {/* Parking Lot — always visible */}
+            <ParkingLot onAddTask={handleAddTask} items={tasks} />
         </div>
     );
 }

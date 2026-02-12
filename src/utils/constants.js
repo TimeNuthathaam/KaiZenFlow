@@ -52,6 +52,26 @@ export const BUCKETS = {
     }
 };
 
+// Priority Type Configuration
+export const PRIORITY_TYPES = {
+    fire: { id: 'fire', icon: '🔥', label: 'ด่วน+สำคัญ', color: 'text-red-400' },
+    bolt: { id: 'bolt', icon: '⚡', label: 'Quick Win', color: 'text-yellow-400' },
+    turtle: { id: 'turtle', icon: '🐢', label: 'Deep Work', color: 'text-blue-400' },
+};
+
+// Priority cycle order (for click-to-cycle)
+export const PRIORITY_CYCLE = [null, 'fire', 'bolt', 'turtle'];
+
+// Energy Level Configuration
+export const ENERGY_LEVELS = {
+    low: { id: 'low', icon: '🔋', label: 'Low Energy', color: 'text-green-400' },
+    medium: { id: 'medium', icon: '🔋🔋', label: 'Medium', color: 'text-yellow-400' },
+    high: { id: 'high', icon: '🔋🔋🔋', label: 'High Energy', color: 'text-red-400' },
+};
+
+// Duration Quick Picks (minutes)
+export const DURATION_OPTIONS = [5, 15, 25, 30, 45, 60, 90];
+
 // Mood Configuration
 export const MOODS = {
     flow: {
@@ -95,10 +115,29 @@ export function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+export function formatMinutes(minutes) {
+    if (!minutes) return null;
+    if (minutes >= 60) {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return m > 0 ? `${h}h${m}m` : `${h}h`;
+    }
+    return `${minutes}m`;
+}
+
 export function getBucketConfig(bucketId) {
     return BUCKETS[bucketId] || BUCKETS.unsorted;
 }
 
 export function getMoodConfig(moodId) {
     return MOODS[moodId] || MOODS.okay;
+}
+
+export function getPriorityConfig(priorityType) {
+    return priorityType ? PRIORITY_TYPES[priorityType] || null : null;
+}
+
+export function getNextPriority(current) {
+    const idx = PRIORITY_CYCLE.indexOf(current);
+    return PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length];
 }

@@ -61,15 +61,19 @@ mcpServer.tool(
 // ==========================================
 mcpServer.tool(
     'create_task',
-    'สร้าง task ใหม่ กำหนด title และ bucket ได้',
+    'สร้าง task ใหม่ — กำหนด title, bucket, เวลาประเมิน, พลังงาน, และ priority ได้',
     {
         title: z.string().describe('ชื่อ task'),
         bucket: z.enum(['unsorted', 'urgent', 'deadline', 'admin', 'creative']).optional().default('unsorted').describe('Bucket category'),
+        estimated_duration: z.number().optional().describe('เวลาประเมิน (นาที) เช่น 5, 15, 30, 60'),
+        energy_level: z.enum(['low', 'medium', 'high']).optional().describe('พลังงานที่ต้องใช้'),
+        priority_type: z.enum(['fire', 'bolt', 'turtle']).optional().describe('🔥=ด่วน, ⚡=Quick Win, 🐢=Deep Work'),
+        source: z.enum(['manual', 'parking_lot', 'voice', 'mcp']).optional().default('mcp').describe('แหล่งที่มา'),
     },
-    async ({ title, bucket }) => {
+    async ({ title, bucket, estimated_duration, energy_level, priority_type, source }) => {
         const [result] = await pool.query(
-            'INSERT INTO kaizen_tasks (title, bucket) VALUES (?, ?)',
-            [title.trim(), bucket]
+            'INSERT INTO kaizen_tasks (title, bucket, estimated_duration, energy_level, priority_type, source) VALUES (?, ?, ?, ?, ?, ?)',
+            [title.trim(), bucket, estimated_duration || null, energy_level || null, priority_type || null, source]
         );
         const [newTask] = await pool.query('SELECT * FROM kaizen_tasks WHERE id = ?', [result.insertId]);
 
@@ -80,7 +84,7 @@ mcpServer.tool(
         return {
             content: [{
                 type: 'text',
-                text: `✅ Task created: "${title}" in [${bucket}] (ID: ${result.insertId})`,
+                text: `✅ Task created: "${title}" in [${bucket}]${estimated_duration ? ` (~${estimated_duration}m)` : ''}${priority_type ? ` ${priority_type}` : ''} (ID: ${result.insertId})`,
             }],
         };
     }
@@ -91,15 +95,18 @@ mcpServer.tool(
 // ==========================================
 mcpServer.tool(
     'update_task',
-    'แก้ไข task — เปลี่ยน title, bucket, highlight, หรือ sort_order',
+    'แก้ไข task — เปลี่ยน title, bucket, highlight, priority, เวลาประเมิน, พลังงาน',
     {
         id: z.number().describe('Task ID'),
         title: z.string().optional().describe('ชื่อใหม่'),
         bucket: z.enum(['unsorted', 'urgent', 'deadline', 'admin', 'creative']).optional().describe('Bucket ใหม่'),
         is_daily_highlight: z.boolean().optional().describe('ตั้งเป็น Daily Highlight'),
         sort_order: z.number().optional().describe('ลำดับการแสดงผล'),
+        estimated_duration: z.number().optional().describe('เวลาประเมิน (นาที)'),
+        energy_level: z.enum(['low', 'medium', 'high']).optional().describe('พลังงานที่ต้องใช้'),
+        priority_type: z.enum(['fire', 'bolt', 'turtle']).optional().describe('🔥⚡🐢 priority'),
     },
-    async ({ id, title, bucket, is_daily_highlight, sort_order }) => {
+    async ({ id, title, bucket, is_daily_highlight, sort_order, estimated_duration, energy_level, priority_type }) => {
         const updates = [];
         const values = [];
 
@@ -112,6 +119,9 @@ mcpServer.tool(
             updates.push('is_daily_highlight = ?'); values.push(is_daily_highlight);
         }
         if (sort_order !== undefined) { updates.push('sort_order = ?'); values.push(sort_order); }
+        if (estimated_duration !== undefined) { updates.push('estimated_duration = ?'); values.push(estimated_duration); }
+        if (energy_level !== undefined) { updates.push('energy_level = ?'); values.push(energy_level); }
+        if (priority_type !== undefined) { updates.push('priority_type = ?'); values.push(priority_type); }
 
         if (updates.length === 0) {
             return { content: [{ type: 'text', text: '⚠️ ไม่มีฟิลด์ที่ต้องอัพเดท' }] };

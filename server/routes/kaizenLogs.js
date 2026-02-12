@@ -1,5 +1,6 @@
 import express from 'express';
 import pool from '../db.js';
+import { broadcast } from '../services/sse.js';
 
 const router = express.Router();
 
@@ -96,6 +97,7 @@ router.post('/', async (req, res) => {
         ]);
 
         const [newLog] = await pool.query('SELECT * FROM kaizen_logs WHERE id = ?', [result.insertId]);
+        broadcast('kaizen_log_created', newLog[0]);
         res.status(201).json(newLog[0]);
     } catch (error) {
         console.error('Error creating kaizen log:', error);
@@ -110,6 +112,7 @@ router.delete('/:id', async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Kaizen log not found' });
         }
+        broadcast('kaizen_log_deleted', { id: parseInt(req.params.id) });
         res.json({ success: true, message: 'Kaizen log deleted' });
     } catch (error) {
         console.error('Error deleting kaizen log:', error);

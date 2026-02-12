@@ -2,9 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initializeDatabase, isDatabaseReady, getDiagnosticSteps } from './db.js';
+import { apiKeyAuth } from './middleware/auth.js';
+import { sseHandler } from './services/sse.js';
 import tasksRouter from './routes/tasks.js';
 import sprintsRouter from './routes/sprints.js';
 import kaizenLogsRouter from './routes/kaizenLogs.js';
+import mcpRouter from './routes/mcp.js';
 
 dotenv.config({ override: false });
 
@@ -22,7 +25,7 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// Health check — shows DB diagnostic steps
+// Health check — shows DB diagnostic steps (no auth required)
 // ==========================================
 app.get('/api/health', async (req, res) => {
     const steps = getDiagnosticSteps();
@@ -58,6 +61,21 @@ app.get('/api/health', async (req, res) => {
         })),
     });
 });
+
+// ==========================================
+// SSE Real-time Events (no auth — frontend uses this)
+// ==========================================
+app.get('/api/events', sseHandler);
+
+// ==========================================
+// API Key Auth — applied to all /api routes below
+// ==========================================
+app.use('/api', apiKeyAuth);
+
+// ==========================================
+// MCP Streamable HTTP endpoint
+// ==========================================
+app.use('/mcp', mcpRouter);
 
 // Routes
 app.use('/api/tasks', tasksRouter);
@@ -98,6 +116,8 @@ async function startServer() {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
         console.log(`   Health check: http://localhost:${PORT}/api/health`);
+        console.log(`   SSE Events:   http://localhost:${PORT}/api/events`);
+        console.log(`   API Key:      ${process.env.API_KEY ? 'ENABLED ✅' : 'DISABLED ⚠️'}`);
         console.log(`   Press Ctrl+C to stop\n`);
     });
 }

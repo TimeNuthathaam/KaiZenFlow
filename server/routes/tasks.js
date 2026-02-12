@@ -1,5 +1,6 @@
 import express from 'express';
 import pool from '../db.js';
+import { broadcast } from '../services/sse.js';
 
 const router = express.Router();
 
@@ -55,6 +56,7 @@ router.post('/', async (req, res) => {
         );
 
         const [newTask] = await pool.query('SELECT * FROM kaizen_tasks WHERE id = ?', [result.insertId]);
+        broadcast('task_created', newTask[0]);
         res.status(201).json(newTask[0]);
     } catch (error) {
         console.error('Error creating task:', error);
@@ -105,6 +107,7 @@ router.put('/:id', async (req, res) => {
         if (updatedTask.length === 0) {
             return res.status(404).json({ error: 'Task not found' });
         }
+        broadcast('task_updated', updatedTask[0]);
         res.json(updatedTask[0]);
     } catch (error) {
         console.error('Error updating task:', error);
@@ -119,6 +122,7 @@ router.delete('/:id', async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Task not found' });
         }
+        broadcast('task_deleted', { id: parseInt(req.params.id) });
         res.json({ success: true, message: 'Task deleted' });
     } catch (error) {
         console.error('Error deleting task:', error);
@@ -138,6 +142,7 @@ router.post('/reorder', async (req, res) => {
             );
         }
 
+        broadcast('tasks_reordered', { count: tasks.length });
         res.json({ success: true });
     } catch (error) {
         console.error('Error reordering tasks:', error);

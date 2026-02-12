@@ -20,6 +20,8 @@ services:
       # Server
       - PORT=3001
       - NODE_ENV=production
+      # API Key for external access (MCP/API)
+      - API_KEY=kzf_a7x9m2p4q8w1e5r3t6y0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

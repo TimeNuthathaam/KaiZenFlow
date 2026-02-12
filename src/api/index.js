@@ -2,6 +2,11 @@
 const API_BASE = '/api';
 
 class ApiClient {
+    constructor() {
+        this._eventSource = null;
+        this._listeners = new Set();
+    }
+
     async request(endpoint, options = {}) {
         const url = `${API_BASE}${endpoint}`;
         const config = {
@@ -25,6 +30,58 @@ class ApiClient {
             console.error(`API Error [${endpoint}]:`, error);
             throw error;
         }
+    }
+
+    // ==========================================
+    // SSE Real-time Events
+    // ==========================================
+
+    /**
+     * Subscribe to real-time data changes
+     * @param {function} callback - Called with { type, data, timestamp }
+     * @returns {function} unsubscribe function
+     */
+    onDataChange(callback) {
+        this._listeners.add(callback);
+
+        // Start SSE connection if not already running
+        if (!this._eventSource) {
+            this._connectSSE();
+        }
+
+        return () => {
+            this._listeners.delete(callback);
+            if (this._listeners.size === 0 && this._eventSource) {
+                this._eventSource.close();
+                this._eventSource = null;
+            }
+        };
+    }
+
+    _connectSSE() {
+        this._eventSource = new EventSource(`${API_BASE}/events`);
+
+        this._eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                for (const listener of this._listeners) {
+                    listener(data);
+                }
+            } catch (e) {
+                console.error('SSE parse error:', e);
+            }
+        };
+
+        this._eventSource.onerror = () => {
+            console.warn('SSE connection lost, reconnecting in 3s...');
+            this._eventSource?.close();
+            this._eventSource = null;
+            setTimeout(() => {
+                if (this._listeners.size > 0) {
+                    this._connectSSE();
+                }
+            }, 3000);
+        };
     }
 
     // Tasks

@@ -42,6 +42,22 @@ export default function App() {
         checkActiveSprint();
     }, []);
 
+    // SSE Real-time: auto-refresh when data changes externally (e.g. from MCP)
+    useEffect(() => {
+        const unsubscribe = api.onDataChange((event) => {
+            console.log('[SSE] Data changed:', event.type);
+            // Refresh tasks on any task-related event
+            if (event.type.startsWith('task')) {
+                loadTasks();
+            }
+            // Refresh sprint on sprint events
+            if (event.type.startsWith('sprint')) {
+                checkActiveSprint();
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     // Guard rail checker
     useEffect(() => {
         const checkGuardRails = () => {

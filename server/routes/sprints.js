@@ -1,5 +1,6 @@
 import express from 'express';
 import pool from '../db.js';
+import { broadcast } from '../services/sse.js';
 
 const router = express.Router();
 
@@ -73,6 +74,7 @@ router.post('/start', async (req, res) => {
         );
 
         const [newSprint] = await pool.query('SELECT * FROM kaizen_sprints WHERE id = ?', [result.insertId]);
+        broadcast('sprint_started', newSprint[0]);
         res.status(201).json(newSprint[0]);
     } catch (error) {
         console.error('Error starting sprint:', error);
@@ -102,6 +104,7 @@ router.post('/stop', async (req, res) => {
     `, [sprintId]);
 
         const [stoppedSprint] = await pool.query('SELECT * FROM kaizen_sprints WHERE id = ?', [sprintId]);
+        broadcast('sprint_stopped', stoppedSprint[0]);
         res.json(stoppedSprint[0]);
     } catch (error) {
         console.error('Error stopping sprint:', error);

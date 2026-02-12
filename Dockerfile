@@ -34,6 +34,7 @@ COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/http.d/default.conf
 
 # Create supervisor config
+# IMPORTANT: environment=... passes Docker env vars to the backend process
 RUN mkdir -p /etc/supervisor.d
 RUN echo '[supervisord]' > /etc/supervisor.d/supervisord.ini && \
     echo 'nodaemon=true' >> /etc/supervisor.d/supervisord.ini && \
@@ -42,13 +43,26 @@ RUN echo '[supervisord]' > /etc/supervisor.d/supervisord.ini && \
     echo 'command=nginx -g "daemon off;"' >> /etc/supervisor.d/supervisord.ini && \
     echo 'autostart=true' >> /etc/supervisor.d/supervisord.ini && \
     echo 'autorestart=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stdout_logfile=/dev/stdout' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stdout_logfile_maxbytes=0' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor.d/supervisord.ini && \
     echo '' >> /etc/supervisor.d/supervisord.ini && \
     echo '[program:backend]' >> /etc/supervisor.d/supervisord.ini && \
     echo 'command=node /app/server/index.js' >> /etc/supervisor.d/supervisord.ini && \
     echo 'directory=/app/server' >> /etc/supervisor.d/supervisord.ini && \
     echo 'autostart=true' >> /etc/supervisor.d/supervisord.ini && \
-    echo 'autorestart=true' >> /etc/supervisor.d/supervisord.ini
+    echo 'autorestart=true' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stdout_logfile=/dev/stdout' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stdout_logfile_maxbytes=0' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor.d/supervisord.ini && \
+    echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor.d/supervisord.ini
+
+# Create startup script that passes environment variables to supervisor
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'exec /usr/bin/supervisord -c /etc/supervisor.d/supervisord.ini' >> /app/start.sh && \
+    chmod +x /app/start.sh
 
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor.d/supervisord.ini"]
+CMD ["/app/start.sh"]

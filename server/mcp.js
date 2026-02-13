@@ -10,6 +10,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import pool from './db.js';
+import adhdService from './services/adhd.service.js';
 
 // Create MCP Server instance
 const mcpServer = new McpServer({
@@ -369,6 +370,275 @@ mcpServer.tool(
                 text: JSON.stringify(result, null, 2),
             }],
         };
+    }
+);
+
+// ==========================================
+// OpenClaw Integration Tools (ADHD Executive Function Engine)
+// ==========================================
+
+// Tool 11: get_adhd_state
+mcpServer.tool(
+    'get_adhd_state',
+    'Get comprehensive ADHD state — CALL THIS FIRST to understand user context. Returns current sprint, energy profile, today summary, streaks, pending tasks, and AI recommendations.',
+    {},
+    async () => {
+        try {
+            const state = await adhdService.getADHDState();
+            return {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify(state, null, 2),
+                }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+);
+
+// Tool 12: plan_day_for_user
+mcpServer.tool(
+    'plan_day_for_user',
+    'Create a daily plan based on goals and energy profile. Best used during morning activation. Returns scheduled time blocks with tasks.',
+    {
+        goals: z.array(z.string()).max(3).optional().describe('1-3 goals for today (e.g., ["Finish presentation", "Exercise"])'),
+        energy_level: z.enum(['low', 'medium', 'high']).optional().describe('Current energy level'),
+        available_hours: z.number().min(1).max(12).optional().describe('Hours available for work (default 8)'),
+        must_do_task_ids: z.array(z.number()).optional().describe('Task IDs that MUST be done today'),
+    },
+    async ({ goals, energy_level, available_hours, must_do_task_ids }) => {
+        try {
+            const plan = await adhdService.planDay({
+                goals: goals || [],
+                available_minutes: available_hours ? available_hours * 60 : undefined,
+                energy_profile: energy_level || 'medium',
+                must_do_task_ids: must_do_task_ids || [],
+            });
+
+            let response = `📋 Daily Plan Created!\n\n`;
+            response += `📅 Date: ${plan.plan_date}\n`;
+            response += `⏱️ Total: ${plan.total_planned_minutes}min (${plan.buffer_minutes}min buffer)\n\n`;
+
+            for (const block of plan.scheduled_blocks) {
+                response += `🕐 ${block.time_slot} — [${block.bucket}]\n`;
+                for (const task of block.tasks) {
+                    const icon = task.priority_type === 'fire' ? '🔥' : task.priority_type === 'bolt' ? '⚡' : '🐢';
+                    response += `   ${icon} ${task.title} (~${task.estimated_duration}m)\n`;
+                }
+                response += '\n';
+            }
+
+            if (plan.warnings.length > 0) {
+                response += `⚠️ Warnings:\n${plan.warnings.map(w => `   - ${w}`).join('\n')}\n\n`;
+            }
+
+            response += `💡 Tips:\n${plan.tips.map(t => `   - ${t}`).join('\n')}`;
+
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error creating plan: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+);
+
+// Tool 13: start_structured_sprint
+mcpServer.tool(
+    'start_structured_sprint',
+    'Start a focus sprint with smart task selection. More powerful than basic start_sprint — auto-selects best tasks based on energy and priority.',
+    {
+        bucket: z.enum(['urgent', 'deadline', 'admin', 'creative']).describe('Which bucket to focus on'),
+        task_ids: z.array(z.number()).optional().describe('Specific task IDs to include (auto-selects if not provided)'),
+        target_minutes: z.number().optional().describe('Target duration in minutes (default 45)'),
+        goal: z.string().optional().describe('Sprint goal (e.g., "Clear all urgent emails")'),
+    },
+    async ({ bucket, task_ids, target_minutes, goal }) => {
+        try {
+            const sprint = await adhdService.startStructuredSprint({
+                bucket,
+                task_ids: task_ids || [],
+                target_minutes: target_minutes || 45,
+                goal: goal || '',
+            });
+
+            let response = `🏃 Sprint Started!\n\n`;
+            response += `📍 Bucket: ${sprint.bucket}\n`;
+            if (sprint.goal) response += `🎯 Goal: ${sprint.goal}\n`;
+            response += `⏱️ Target: ${sprint.target_minutes}min\n`;
+            response += `📊 Estimated: ${sprint.estimated_total_minutes}min\n\n`;
+            response += `📝 Selected Tasks:\n`;
+
+            for (const task of sprint.selected_tasks) {
+                response += `   • ${task.title} (~${task.estimated_duration || 25}m)\n`;
+            }
+
+            response += `\n💪 Focus mode activated! Stay strong!`;
+
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error starting sprint: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+);
+
+// Tool 14: log_distraction
+mcpServer.tool(
+    'log_distraction',
+    'Log a distraction during focus time. Can optionally capture the thought as a parking lot task.',
+    {
+        source: z.enum(['phone', 'thought', 'person', 'environment', 'internal', 'other']).describe('What caused the distraction'),
+        description: z.string().optional().describe('Brief description of the distraction'),
+        capture_as_task: z.boolean().optional().default(false).describe('Save as a parking lot task'),
+    },
+    async ({ source, description, capture_as_task }) => {
+        try {
+            const result = await adhdService.logDistraction({
+                source,
+                description: description || '',
+                capture_as_task: capture_as_task || false,
+                task_title: description || '',
+            });
+
+            let response = `📱 Distraction Logged\n\n`;
+            response += `Source: ${source}\n`;
+            if (description) response += `Note: "${description}"\n`;
+
+            if (result.captured_task) {
+                response += `\n🅿️ Captured as task: "${result.captured_task.title}" (ID: ${result.captured_task.id})\n`;
+            }
+
+            response += `\n✨ ${result.encouragement}\n`;
+            if (result.focus_reminder) {
+                response += `\n🎯 ${result.focus_reminder}`;
+            }
+
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+);
+
+// Tool 15: summarize_today
+mcpServer.tool(
+    'summarize_today',
+    'Get a summary of productivity with patterns and insights. Great for end-of-day review.',
+    {
+        period: z.enum(['today', 'yesterday', 'week', 'month']).optional().default('today').describe('Time period to summarize'),
+    },
+    async ({ period }) => {
+        try {
+            const summary = await adhdService.summarize(period || 'today');
+
+            let response = `📊 ${period.charAt(0).toUpperCase() + period.slice(1)}'s Summary\n\n`;
+
+            // Productivity
+            const hours = Math.floor(summary.productivity.total_focus_time_seconds / 3600);
+            const mins = Math.floor((summary.productivity.total_focus_time_seconds % 3600) / 60);
+            response += `⏱️ Focus Time: ${hours}h ${mins}m\n`;
+            response += `✅ Tasks Completed: ${summary.productivity.total_tasks_completed}\n`;
+            response += `🔥 Flow Sessions: ${summary.productivity.flow_sessions}\n`;
+            response += `😫 Drained Sessions: ${summary.productivity.drained_sessions}\n\n`;
+
+            // Patterns
+            response += `📈 Patterns:\n`;
+            response += `   Best Bucket: ${summary.patterns.most_productive_bucket}\n`;
+            response += `   Avg Session: ${Math.round(summary.patterns.average_session_length / 60)}min\n`;
+            response += `   Distractions: ${summary.patterns.distraction_count}\n`;
+            if (summary.patterns.top_distraction_sources.length > 0) {
+                response += `   Top Source: ${summary.patterns.top_distraction_sources[0].source}\n`;
+            }
+            response += '\n';
+
+            // Estimation accuracy
+            const ratio = summary.estimation_accuracy.average_ratio;
+            const accuracyEmoji = ratio > 1.2 ? '⚠️' : ratio < 0.8 ? '🎯' : '✓';
+            response += `📐 Estimation: ${accuracyEmoji} ${Math.round(ratio * 100)}% of actual\n\n`;
+
+            // Insights
+            if (summary.insights.length > 0) {
+                response += `💡 Insights:\n${summary.insights.map(i => `   • ${i}`).join('\n')}\n\n`;
+            }
+
+            // Recommendations
+            if (summary.recommendations.length > 0) {
+                response += `🎯 Recommendations:\n${summary.recommendations.map(r => `   • ${r}`).join('\n')}`;
+            }
+
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error: ${error.message}` }],
+                isError: true,
+            };
+        }
+    }
+);
+
+// Tool 16: get_focus_recommendation
+mcpServer.tool(
+    'get_focus_recommendation',
+    'Get AI recommendation for what to do next. Uses current state, energy level, and pending tasks.',
+    {
+        energy: z.enum(['low', 'medium', 'high']).optional().describe('Override auto-detected energy level'),
+        available_minutes: z.number().optional().describe('Time available for work'),
+    },
+    async ({ energy, available_minutes }) => {
+        try {
+            const rec = await adhdService.getFocusRecommendation({
+                energy,
+                available_minutes,
+            });
+
+            let response = `🎯 Recommendation: ${rec.recommended_action.replace(/_/g, ' ').toUpperCase()}\n\n`;
+            response += `💭 ${rec.reasoning}\n\n`;
+
+            if (rec.if_start_sprint) {
+                response += `📍 Suggested Sprint: [${rec.if_start_sprint.suggested_bucket}]\n`;
+                response += `⏱️ Estimated: ${rec.if_start_sprint.estimated_total_minutes}min\n\n`;
+                response += `📝 Tasks:\n`;
+                for (const task of rec.if_start_sprint.suggested_tasks) {
+                    response += `   • ${task.title} (~${task.estimated_duration}m)\n`;
+                    response += `     → ${task.reason}\n`;
+                }
+                response += '\n';
+            }
+
+            if (rec.current_sprint) {
+                response += `🏃 Current Sprint: [${rec.current_sprint.bucket}]\n\n`;
+            }
+
+            response += `🔄 Alternatives:\n${rec.alternative_actions.map(a => `   • ${a}`).join('\n')}`;
+
+            return {
+                content: [{ type: 'text', text: response }],
+            };
+        } catch (error) {
+            return {
+                content: [{ type: 'text', text: `❌ Error: ${error.message}` }],
+                isError: true,
+            };
+        }
     }
 );
 

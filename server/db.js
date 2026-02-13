@@ -149,9 +149,67 @@ async function initializeTables() {
             )
         `);
 
+        // Create adhd_distractions table (OpenClaw integration)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS adhd_distractions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                source ENUM('phone', 'thought', 'person', 'environment', 'internal', 'other') DEFAULT 'other',
+                description TEXT,
+                captured_task_id INT DEFAULT NULL COMMENT 'If converted to task, link here',
+                sprint_id INT DEFAULT NULL COMMENT 'Sprint when distraction occurred',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_source (source),
+                INDEX idx_created (created_at),
+                INDEX idx_sprint (sprint_id)
+            )
+        `);
+
+        // Create adhd_daily_plans table (Morning Activation)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS adhd_daily_plans (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                plan_date DATE NOT NULL,
+                morning_energy ENUM('low', 'medium', 'high') DEFAULT 'medium',
+                total_available_minutes INT DEFAULT 480 COMMENT '8 hours default',
+                planned_tasks JSON COMMENT 'Array of task IDs with order',
+                goals JSON COMMENT 'Array of goal strings',
+                notes TEXT,
+                is_executed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_plan_date (plan_date),
+                INDEX idx_plan_date (plan_date)
+            )
+        `);
+
+        // Create adhd_streaks table (Gamification)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS adhd_streaks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                streak_type ENUM('daily_plan', 'morning_activation', 'sprint_complete', 'focus_session') NOT NULL,
+                current_count INT DEFAULT 0,
+                longest_count INT DEFAULT 0,
+                last_activity_date DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_streak_type (streak_type)
+            )
+        `);
+
+        // Initialize default streaks
+        await pool.query(`
+            INSERT IGNORE INTO adhd_streaks (streak_type, current_count, longest_count)
+            VALUES
+                ('daily_plan', 0, 0),
+                ('morning_activation', 0, 0),
+                ('sprint_complete', 0, 0),
+                ('focus_session', 0, 0)
+        `);
+
         // Verify tables
-        const [tables] = await pool.query(`SHOW TABLES LIKE 'kaizen%'`);
-        logStep(4, 'TABLES_INIT', 'ok', `${tables.length} tables ready`);
+        const [kaizenTables] = await pool.query(`SHOW TABLES LIKE 'kaizen%'`);
+        const [adhdTables] = await pool.query(`SHOW TABLES LIKE 'adhd%'`);
+        logStep(4, 'TABLES_INIT', 'ok', `${kaizenTables.length + adhdTables.length} tables ready (kaizen: ${kaizenTables.length}, adhd: ${adhdTables.length})`);
 
         // Step 5: Migrate existing tables (add new columns safely)
         await migrateColumns();
@@ -169,12 +227,27 @@ async function initializeTables() {
 // ==========================================
 async function migrateColumns() {
     const migrations = [
+        // Existing ADHD v2 columns
         { table: 'kaizen_tasks', column: 'estimated_duration', sql: 'ALTER TABLE kaizen_tasks ADD COLUMN estimated_duration INT DEFAULT NULL' },
         { table: 'kaizen_tasks', column: 'energy_level', sql: "ALTER TABLE kaizen_tasks ADD COLUMN energy_level ENUM('low','medium','high') DEFAULT NULL" },
         { table: 'kaizen_tasks', column: 'priority_type', sql: "ALTER TABLE kaizen_tasks ADD COLUMN priority_type ENUM('fire','bolt','turtle') DEFAULT NULL" },
         { table: 'kaizen_tasks', column: 'source', sql: "ALTER TABLE kaizen_tasks ADD COLUMN source ENUM('manual','parking_lot','voice','mcp') DEFAULT 'manual'" },
         { table: 'kaizen_sprints', column: 'estimated_total_minutes', sql: 'ALTER TABLE kaizen_sprints ADD COLUMN estimated_total_minutes INT DEFAULT NULL' },
         { table: 'kaizen_logs', column: 'estimated_seconds', sql: 'ALTER TABLE kaizen_logs ADD COLUMN estimated_seconds INT DEFAULT NULL' },
+
+        // OpenClaw Integration columns (ADHD Executive Function Engine)
+        { table: 'kaizen_tasks', column: 'dopamine_score', sql: 'ALTER TABLE kaizen_tasks ADD COLUMN dopamine_score TINYINT DEFAULT NULL COMMENT "0=Boring 1=Meh 2=Interesting 3=Exciting"' },
+        { table: 'kaizen_tasks', column: 'friction_level', sql: "ALTER TABLE kaizen_tasks ADD COLUMN friction_level ENUM('low','medium','high') DEFAULT NULL COMMENT 'Difficulty to start'" },
+        { table: 'kaizen_tasks', column: 'environment', sql: "ALTER TABLE kaizen_tasks ADD COLUMN environment ENUM('home','clinic','cafe','anywhere') DEFAULT 'anywhere' COMMENT 'Best location for task'" },
+        { table: 'kaizen_tasks', column: 'deadline_at', sql: 'ALTER TABLE kaizen_tasks ADD COLUMN deadline_at DATETIME DEFAULT NULL COMMENT "Hard deadline"' },
+        { table: 'kaizen_tasks', column: 'tags', sql: 'ALTER TABLE kaizen_tasks ADD COLUMN tags JSON DEFAULT NULL COMMENT "Array of tag strings"' },
+
+        // Sprint enhancements for OpenClaw
+        { table: 'kaizen_sprints', column: 'goal', sql: 'ALTER TABLE kaizen_sprints ADD COLUMN goal VARCHAR(255) DEFAULT NULL COMMENT "Sprint goal from OpenClaw"' },
+        { table: 'kaizen_sprints', column: 'planned_task_ids', sql: 'ALTER TABLE kaizen_sprints ADD COLUMN planned_task_ids JSON DEFAULT NULL COMMENT "Tasks planned for this sprint"' },
+
+        // Kaizen logs enhancements
+        { table: 'kaizen_logs', column: 'distraction_count', sql: 'ALTER TABLE kaizen_logs ADD COLUMN distraction_count INT DEFAULT 0 COMMENT "Number of distractions during sprint"' },
     ];
 
     let added = 0;

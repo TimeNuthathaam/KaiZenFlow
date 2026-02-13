@@ -8,6 +8,7 @@ import tasksRouter from './routes/tasks.js';
 import sprintsRouter from './routes/sprints.js';
 import kaizenLogsRouter from './routes/kaizenLogs.js';
 import mcpRouter from './routes/mcp.js';
+import adhdRouter from './routes/adhd.js';
 
 dotenv.config({ override: false });
 
@@ -81,6 +82,7 @@ app.use('/mcp', mcpRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/sprints', sprintsRouter);
 app.use('/api/kaizen-logs', kaizenLogsRouter);
+app.use('/api/adhd', adhdRouter);  // OpenClaw Integration
 
 // Error handling
 app.use((err, req, res, next) => {
